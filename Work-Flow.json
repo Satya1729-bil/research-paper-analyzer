@@ -1,0 +1,1014 @@
+{
+  "name": "Vilambo Research Paper Analyzer",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nreturn [{\n  json: {\n    paper_text: body.paper_text || '',\n    pdf_url: body.pdf_url || '',\n    analysis: null, analysis_score: 0, analysis_feedback: '', analysis_retries: 0,\n    summary: null, summary_score: 0, summary_feedback: '', summary_retries: 0,\n    citations: null, citations_score: 0, citations_feedback: '', citations_retries: 0\n  }\n}];"
+      },
+      "id": "0685b1fe-ab54-460e-98e8-c7c985ec7036",
+      "name": "Init State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -6592,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{$json.pdf_url}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b9905492-47a9-4a30-9192-558e1648586e",
+      "name": "Has PDF URL?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -6368,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.pdf_url}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "1cc19038-74b3-42ac-a615-56e4b54824c4",
+      "name": "Download PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -6144,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "id": "08069a19-8386-4ec0-afee-9c47ece082cc",
+      "name": "Extract PDF Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        -5920,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $('Init State').item.json;\nreturn [{ json: { ...state, paper_text: $json.text || state.paper_text } }];"
+      },
+      "id": "b7fc10b9-bdfc-4e97-8fda-32f576702ced",
+      "name": "Merge Extracted Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -5696,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const feedback = $json.analysis_feedback ? `\nAddress this feedback from the last review: ${$json.analysis_feedback}` : '';\nconst prompt = `You are the Paper Analyzer agent in a multi-agent research paper review system.\nExtract from the paper: 1) problem statement 2) methodology 3) key experiments 4) main findings.\nReturn ONLY valid JSON with exactly these string keys: problem_statement, methodology, experiments, findings.\nNo markdown formatting, no extra commentary, JSON only.${feedback}\n\nPAPER TEXT:\n${($json.paper_text || '').slice(0, 8000)}`;\nreturn [{ json: { ...$json, prompt } }];"
+      },
+      "id": "d4d292ca-401e-4347-be7c-82fc4cdb736e",
+      "name": "Build Analyzer Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -5472,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { contents: [ { parts: [ { text: $json.prompt } ] } ], generationConfig: { temperature: 0.2, responseMimeType: 'application/json', responseSchema: { type: 'OBJECT', properties: { problem_statement: { type: 'STRING' }, methodology: { type: 'STRING' }, experiments: { type: 'STRING' }, findings: { type: 'STRING' } }, required: ['problem_statement', 'methodology', 'experiments', 'findings'] } } } }}",
+        "options": {}
+      },
+      "id": "3dc3b185-716b-464a-949d-55e62cb42bd4",
+      "name": "Gemini - Analyzer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -5248,
+        320
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "8xWTPZ1WMO4IwR0y",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $('Build Analyzer Prompt').item.json;\nconst raw = $json.candidates?.[0]?.content?.parts?.[0]?.text || '{}';\nconst cleaned = raw.replace(/```json|```/g, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(cleaned); } catch (e) { parsed = { error: 'parse_failed', raw: cleaned }; }\nreturn [{ json: { ...state, analysis: parsed } }];"
+      },
+      "id": "9a407983-9471-4e23-8ea2-815bf017cbe4",
+      "name": "Parse Analyzer Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -5024,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prompt = `You are the Review Agent (Quality Control) in a multi-agent research paper review system.\nEvaluate this Paper Analyzer output for accuracy, completeness, and clarity against the source paper.\nReturn ONLY valid JSON with exactly these keys: score (integer 1 to 10), feedback (a short string).\nNo markdown formatting, JSON only.\n\nANALYZER OUTPUT:\n${JSON.stringify($json.analysis)}\n\nSOURCE PAPER (excerpt):\n${($json.paper_text || '').slice(0, 6000)}`;\nreturn [{ json: { ...$json, review_prompt: prompt } }];"
+      },
+      "id": "265c750a-7b52-4027-82f0-2ea6388d3d44",
+      "name": "Build Review Prompt (Analyzer)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4800,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { contents: [ { parts: [ { text: $json.review_prompt } ] } ], generationConfig: { temperature: 0.2, responseMimeType: 'application/json', responseSchema: { type: 'OBJECT', properties: { score: { type: 'INTEGER' }, feedback: { type: 'STRING' } }, required: ['score', 'feedback'] } } } }}",
+        "options": {}
+      },
+      "id": "a4791d95-d472-4c16-9d48-dccb1fabfbb2",
+      "name": "Gemini - Review Analyzer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -4576,
+        320
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "8xWTPZ1WMO4IwR0y",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $('Build Review Prompt (Analyzer)').item.json;\nconst raw = $json.candidates?.[0]?.content?.parts?.[0]?.text || '{}';\nconst cleaned = raw.replace(/```json|```/g, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(cleaned); } catch (e) { parsed = { score: 0, feedback: 'review_parse_failed' }; }\nreturn [{ json: { ...state, analysis_score: parsed.score || 0, analysis_feedback: parsed.feedback || '' } }];"
+      },
+      "id": "d43952d2-e4f1-410d-9bc6-8526ac80eb58",
+      "name": "Parse Review (Analyzer)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4352,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "a1",
+              "leftValue": "={{$json.analysis_score}}",
+              "rightValue": 7,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "a2",
+              "leftValue": "={{$json.analysis_retries}}",
+              "rightValue": 2,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e4a863c5-1103-4ec2-832b-a8905584c4f1",
+      "name": "Analyzer Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -4128,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const feedback = $json.summary_feedback ? `\nAddress this feedback from the last review: ${$json.summary_feedback}` : '';\nconst prompt = `You are the Summary Generator agent in a multi-agent research paper review system.\nWrite a clear executive summary (150 to 200 words) covering the problem, approach, and results.\nReturn ONLY valid JSON with one key: summary (a single string, 150 to 200 words).\nNo markdown formatting, JSON only.${feedback}\n\nANALYSIS:\n${JSON.stringify($json.analysis)}\n\nPAPER TEXT:\n${($json.paper_text || '').slice(0, 8000)}`;\nreturn [{ json: { ...$json, prompt } }];"
+      },
+      "id": "4a2ca954-c81d-46e8-9da4-09e95fbec2f0",
+      "name": "Build Summary Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3904,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { contents: [ { parts: [ { text: $json.prompt } ] } ], generationConfig: { temperature: 0.2, responseMimeType: 'application/json', responseSchema: { type: 'OBJECT', properties: { summary: { type: 'STRING' } }, required: ['summary'] } } } }}",
+        "options": {}
+      },
+      "id": "9d64dd9f-e285-4b4d-8c9f-23c78db8f2e2",
+      "name": "Gemini - Summary Generator",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -3680,
+        208
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "8xWTPZ1WMO4IwR0y",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $('Build Summary Prompt').item.json;\nconst raw = $json.candidates?.[0]?.content?.parts?.[0]?.text || '{}';\nconst cleaned = raw.replace(/```json|```/g, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(cleaned); } catch (e) { parsed = { summary: '', error: 'parse_failed' }; }\nreturn [{ json: { ...state, summary: parsed.summary || '' } }];"
+      },
+      "id": "858b819f-e1fb-4e64-b0f0-7369c770bc25",
+      "name": "Parse Summary Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3456,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prompt = `You are the Review Agent (Quality Control). Evaluate this executive summary for accuracy,\ncompleteness (should be 150 to 200 words), and clarity.\nReturn ONLY valid JSON with exactly these keys: score (integer 1 to 10), feedback (a short string).\nNo markdown formatting, JSON only.\n\nSUMMARY:\n${$json.summary}\n\nSOURCE ANALYSIS:\n${JSON.stringify($json.analysis)}`;\nreturn [{ json: { ...$json, review_prompt: prompt } }];"
+      },
+      "id": "f045b96e-1f57-465f-a6f3-17804d51fd9e",
+      "name": "Build Review Prompt (Summary)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3232,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { contents: [ { parts: [ { text: $json.review_prompt } ] } ], generationConfig: { temperature: 0.2, responseMimeType: 'application/json', responseSchema: { type: 'OBJECT', properties: { score: { type: 'INTEGER' }, feedback: { type: 'STRING' } }, required: ['score', 'feedback'] } } } }}",
+        "options": {}
+      },
+      "id": "a876eac1-8480-48e5-b38a-efbd60b5a502",
+      "name": "Gemini - Review Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -3008,
+        208
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "8xWTPZ1WMO4IwR0y",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $('Build Review Prompt (Summary)').item.json;\nconst raw = $json.candidates?.[0]?.content?.parts?.[0]?.text || '{}';\nconst cleaned = raw.replace(/```json|```/g, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(cleaned); } catch (e) { parsed = { score: 0, feedback: 'review_parse_failed' }; }\nreturn [{ json: { ...state, summary_score: parsed.score || 0, summary_feedback: parsed.feedback || '' } }];"
+      },
+      "id": "0b66ed00-0103-4083-94a2-60bf713baea1",
+      "name": "Parse Review (Summary)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2784,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "s1",
+              "leftValue": "={{$json.summary_score}}",
+              "rightValue": 7,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "s2",
+              "leftValue": "={{$json.summary_retries}}",
+              "rightValue": 2,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4b7fac27-9b94-4dc4-93ee-feeaecb761f7",
+      "name": "Summary Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2560,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const feedback = $json.citations_feedback ? `\nAddress this feedback from the last review: ${$json.citations_feedback}` : '';\nconst prompt = `You are the Citation Extractor agent in a multi-agent research paper review system.\nIdentify and organize all citations, references, and key related papers mentioned in the text.\nReturn ONLY valid JSON with one key: citations, an array of strings, each a formatted citation.\nNo markdown formatting, JSON only.${feedback}\n\nPAPER TEXT:\n${($json.paper_text || '').slice(-8000)}`;\nreturn [{ json: { ...$json, prompt } }];"
+      },
+      "id": "e457d27f-ac0a-47fa-930a-82f5cbf20b33",
+      "name": "Build Citation Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2336,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { contents: [ { parts: [ { text: $json.prompt } ] } ], generationConfig: { temperature: 0.2, responseMimeType: 'application/json', responseSchema: { type: 'OBJECT', properties: { citations: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['citations'] } } } }}",
+        "options": {}
+      },
+      "id": "71ddcd2b-3e15-4662-85e6-ca7e570a2e82",
+      "name": "Gemini - Citation Extractor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2112,
+        80
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "8xWTPZ1WMO4IwR0y",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $('Build Citation Prompt').item.json;\nconst raw = $json.candidates?.[0]?.content?.parts?.[0]?.text || '{}';\nconst cleaned = raw.replace(/```json|```/g, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(cleaned); } catch (e) { parsed = { citations: [], error: 'parse_failed' }; }\nreturn [{ json: { ...state, citations: parsed.citations || [] } }];"
+      },
+      "id": "e68e73b9-a158-4299-b5f7-0b92051db8cc",
+      "name": "Parse Citation Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1888,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prompt = `You are the Review Agent (Quality Control). Evaluate this citation list for completeness\nand accuracy against the source text.\nReturn ONLY valid JSON with exactly these keys: score (integer 1 to 10), feedback (a short string).\nNo markdown formatting, JSON only.\n\nCITATIONS:\n${JSON.stringify($json.citations)}\n\nSOURCE PAPER (excerpt):\n${($json.paper_text || '').slice(0, 6000)}`;\nreturn [{ json: { ...$json, review_prompt: prompt } }];"
+      },
+      "id": "a73f9685-2d43-4a4d-b9bf-5b6396fdc43f",
+      "name": "Build Review Prompt (Citation)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1664,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { contents: [ { parts: [ { text: $json.review_prompt } ] } ], generationConfig: { temperature: 0.2, responseMimeType: 'application/json', responseSchema: { type: 'OBJECT', properties: { score: { type: 'INTEGER' }, feedback: { type: 'STRING' } }, required: ['score', 'feedback'] } } } }}",
+        "options": {}
+      },
+      "id": "3b687ce6-2365-40de-8021-0df81838ccfe",
+      "name": "Gemini - Review Citation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1440,
+        80
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "8xWTPZ1WMO4IwR0y",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $('Build Review Prompt (Citation)').item.json;\nconst raw = $json.candidates?.[0]?.content?.parts?.[0]?.text || '{}';\nconst cleaned = raw.replace(/```json|```/g, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(cleaned); } catch (e) { parsed = { score: 0, feedback: 'review_parse_failed' }; }\nreturn [{ json: { ...state, citations_score: parsed.score || 0, citations_feedback: parsed.feedback || '' } }];"
+      },
+      "id": "fdad6713-24d6-4fd4-b70b-818070cd324f",
+      "name": "Parse Review (Citation)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1216,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "ci1",
+              "leftValue": "={{$json.citations_score}}",
+              "rightValue": 7,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "ci2",
+              "leftValue": "={{$json.citations_retries}}",
+              "rightValue": 2,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c37550fa-78c7-4fa7-87e3-b7b12f9b0eda",
+      "name": "Citation Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -992,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    metadata: { generated_at: new Date().toISOString() },\n    research_analysis: $json.analysis,\n    executive_summary: $json.summary,\n    citations: $json.citations,\n    quality_scores: {\n      analysis: $json.analysis_score,\n      summary: $json.summary_score,\n      citations: $json.citations_score\n    },\n    retries: {\n      analysis: $json.analysis_retries,\n      summary: $json.summary_retries,\n      citations: $json.citations_retries\n    }\n  }\n}];"
+      },
+      "id": "bba470f5-7453-46fe-829d-b0797663d936",
+      "name": "Combine Final Brief",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -768,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "587c6701-ef0f-48e5-81cf-3f5865c0f514",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -544,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ...$json, citations_retries: ($json.citations_retries || 0) + 1 } }];"
+      },
+      "id": "8fd0d153-2786-4ca9-bcc0-9b6fe2325363",
+      "name": "Retry Citation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -768,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ...$json, summary_retries: ($json.summary_retries || 0) + 1 } }];"
+      },
+      "id": "e210af9d-3a35-4831-9031-b9cdb061f511",
+      "name": "Retry Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2336,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ...$json, analysis_retries: ($json.analysis_retries || 0) + 1 } }];"
+      },
+      "id": "fcf94699-e952-4515-8c7f-f7779dcd3f83",
+      "name": "Retry Analyzer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3904,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "research-paper-analyzer",
+        "responseMode": "responseNode",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -6848,
+        400
+      ],
+      "id": "a43051fd-adc1-479e-b2aa-043cec3ae8f5",
+      "name": "Webhook",
+      "webhookId": "648f9e76-b44c-4843-81f1-05d1a446b9f2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Init State": {
+      "main": [
+        [
+          {
+            "node": "Has PDF URL?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has PDF URL?": {
+      "main": [
+        [
+          {
+            "node": "Download PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Analyzer Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download PDF": {
+      "main": [
+        [
+          {
+            "node": "Extract PDF Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF Text": {
+      "main": [
+        [
+          {
+            "node": "Merge Extracted Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Extracted Text": {
+      "main": [
+        [
+          {
+            "node": "Build Analyzer Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Analyzer Prompt": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Parse Analyzer Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Analyzer Output": {
+      "main": [
+        [
+          {
+            "node": "Build Review Prompt (Analyzer)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Review Prompt (Analyzer)": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Review Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Review Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Parse Review (Analyzer)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Review (Analyzer)": {
+      "main": [
+        [
+          {
+            "node": "Analyzer Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyzer Approved?": {
+      "main": [
+        [
+          {
+            "node": "Build Summary Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Retry Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Summary Prompt": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Summary Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Summary Generator": {
+      "main": [
+        [
+          {
+            "node": "Parse Summary Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Summary Output": {
+      "main": [
+        [
+          {
+            "node": "Build Review Prompt (Summary)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Review Prompt (Summary)": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Review Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Review Summary": {
+      "main": [
+        [
+          {
+            "node": "Parse Review (Summary)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Review (Summary)": {
+      "main": [
+        [
+          {
+            "node": "Summary Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summary Approved?": {
+      "main": [
+        [
+          {
+            "node": "Build Citation Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Retry Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Citation Prompt": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Citation Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Citation Extractor": {
+      "main": [
+        [
+          {
+            "node": "Parse Citation Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Citation Output": {
+      "main": [
+        [
+          {
+            "node": "Build Review Prompt (Citation)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Review Prompt (Citation)": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Review Citation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Review Citation": {
+      "main": [
+        [
+          {
+            "node": "Parse Review (Citation)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Review (Citation)": {
+      "main": [
+        [
+          {
+            "node": "Citation Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Citation Approved?": {
+      "main": [
+        [
+          {
+            "node": "Combine Final Brief",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Retry Citation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Final Brief": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Citation": {
+      "main": [
+        [
+          {
+            "node": "Build Citation Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Summary": {
+      "main": [
+        [
+          {
+            "node": "Build Summary Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Build Analyzer Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Init State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "24ac7f54-03b8-4a9c-8e5d-a18714d49b1f",
+  "meta": {
+    "instanceId": "7eadedc77ea6ab2da603adc70fc180ba323944e9e857785404b5218df2872f11"
+  },
+  "nodeGroups": [],
+  "id": "FVRkg9cojp9A4Nwb",
+  "tags": []
+}
