@@ -12,7 +12,7 @@ assignment.
 
 **Demo video:** https://drive.google.com/file/d/1GJv1XUAdNjZkwwqLjBOkGelAhFiDw4DD/view?usp=sharing
 
-**Agent URL** https://arjunn1729.app.n8n.cloud/webhook-test/research-paper-analyzer
+**Agent URL** https://arjunn1729.app.n8n.cloud/webhook/research-paper-analyzer
 
 ---
 
