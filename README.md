@@ -101,7 +101,7 @@ curl -X POST https://YOUR-N8N-URL/webhook/research-paper-analyzer \
 
 Or with pasted text instead of a PDF URL:
 ```json
-{"paper_text": "your paper text here"}
+{"paper_text": "Text"}
 ```
 
 ### 5. UI (optional, bonus)
