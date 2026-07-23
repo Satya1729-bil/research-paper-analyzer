@@ -8,8 +8,9 @@ combining it all into a final research brief.
 Built for the Vilambo Private Limited AI Agent Developer Intern technical
 assignment.
 
-**Live UI:** [add your Lovable deployment link here]
-**Demo video:** [add your Google Drive link here]
+**Live UI:** : https://preview--researchpaperanalyzer.lovable.app/
+**Demo video:** https://drive.google.com/file/d/1GJv1XUAdNjZkwwqLjBOkGelAhFiDw4DD/view?usp=sharing
+**Agent URL** https://arjunn1729.app.n8n.cloud/webhook-test/research-paper-analyzer
 
 ---
 
