@@ -9,7 +9,7 @@ Built for the Vilambo Private Limited AI Agent Developer Intern technical
 assignment.
 
 **Live UI:** https://research-paper-analyzeragent.lovable.app
-**Demo video:** [add your Google Drive link here]
+**Demo video:** https://drive.google.com/file/d/1GJv1XUAdNjZkwwqLjBOkGelAhFiDw4DD/view?usp=drive_link
 
 ---
 
@@ -106,7 +106,7 @@ Input (PDF URL or pasted text)
 ```bash
 curl -X POST https://YOUR-N8N-URL/webhook/research-paper-analyzer \
   -H "Content-Type: application/json" \
-  -d "{\"pdf_url\": \"https://arxiv.org/pdf/2607.18313\"}"
+  -d "{\"pdf_url\": \"https://arxiv.org/pdf/2608.03495"}"
 ```
 
 Or with pasted text instead of a PDF URL:
