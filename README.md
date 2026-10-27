@@ -19,8 +19,8 @@ Built for the Vilambo Private Limited AI Agent Developer Intern technical assign
   sample-input.txt    — example arXiv PDF URL used for testing
   sample-output.json  — full research brief returned for that paper
   AI AGENT WORKFLOW.png — architecture diagram
-/ui                   — React + Tailwind frontend (built with Lovable),
-                         calls the n8n webhook directly from the browser
+UI (hosted)           — React + Tailwind frontend built with Lovable. Its
+                         source is not in this repo yet; see the Live UI link.
 ```
 
 ## Architecture
@@ -81,7 +81,7 @@ Input (PDF URL or pasted text)
 - **LLM:** Google Gemini API (`gemini-3.5-flash-lite`), structured JSON
   output enforced via `responseSchema`
 - **PDF processing:** n8n's built-in Extract From File node
-- **UI:** React + Tailwind (`/ui`), built with Lovable, calls the n8n
+- **UI:** React + Tailwind, built with Lovable (hosted, source not in this repo), calls the n8n
   webhook directly from the browser — supports PDF upload, paper URL, and
   pasted text as input
 
@@ -115,23 +115,15 @@ Or with pasted text instead of a PDF URL:
 If you see CORS errors calling the webhook from a browser, add a Response
 Header on the Webhook node: `Access-Control-Allow-Origin: *`.
 
-## Setup instructions — UI (`/ui`)
+## UI
 
 The UI is a React + Tailwind app (built with Lovable) with three input
 modes — PDF upload, paper URL, or pasted text — and a results screen
 showing the research analysis, executive summary, citations, and per-agent
 quality scores/retry counts for transparency into the review loop.
 
-To run it yourself:
-
-```sh
-cd ui
-npm i
-npm run dev
-```
-
-Update the webhook URL constant in the app to point at your own n8n
-production URL before running, or use the hosted version linked above.
+The frontend source code is not in this repository yet. To try it, use the
+hosted Live UI linked at the top of this README.
 
 ## Sample input / output
 
