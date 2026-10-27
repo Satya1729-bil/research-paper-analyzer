@@ -1,15 +1,13 @@
-# Vilambo Research Paper Analyzer
+# Research Paper Analyzer
 
-A multi-agent AI system that analyzes academic research papers automatically —
-extracting methodology, generating summaries, organizing citations, and
-running everything through an automated quality-control review loop before
-combining it all into a final research brief. Includes a bonus web UI.
+**Turn a research paper into a checked, structured brief.**
 
-Built for the Vilambo Private Limited AI Agent Developer Intern technical
-assignment.
+Give it a paper as a PDF link or as text. A lead agent sends it to agents that analyze the method, write a summary and organize citations. A review agent scores each part and sends it back if the score is under 7. The approved parts are combined into one brief.
 
-**Live UI:** https://research-paper-analyzeragent.lovable.app
-**Demo video:** https://drive.google.com/file/d/1GJv1XUAdNjZkwwqLjBOkGelAhFiDw4DD/view?usp=drive_link
+- **Live UI:** https://research-paper-analyzeragent.lovable.app
+- **Demo video:** https://drive.google.com/file/d/1GJv1XUAdNjZkwwqLjBOkGelAhFiDw4DD/view?usp=drive_link
+
+Built for the Vilambo Private Limited AI Agent Developer Intern technical assignment.
 
 ---
 
